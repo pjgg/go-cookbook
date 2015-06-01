@@ -1,45 +1,58 @@
-# linux_box_name = 'opscode_centos-5.9_chef-11.4.4'
-# linux_box_name = 'opscode-fedora-20'
-linux_box_name = 'opscode_ubuntu-12.04_chef-11.2.0'
-linux_box_url  = "https://opscode-vm.s3.amazonaws.com/vagrant/#{linux_box_name}.box"
-windows_box_name = 'vagrant-windows2008r2'
-windows_box_url = "http://PUTINYOURBOXSERVERHERE/vagrant/boxes/#{windows_box_name}.box"
-api_version = '2'
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+ 
+# Adjustable settings
+CFG_TZ = "UTC"     # timezone, like US/Pacific, US/Eastern, UTC, Europe/Warsaw, etc.
+ 
+# Provisioning script
+node_script = <<SCRIPT
+#!/bin/bash
 
-Vagrant::configure(api_version) do |config|
+# set timezone
+echo "#{CFG_TZ}" > /etc/timezone    
+dpkg-reconfigure -f noninteractive tzdata
+
+# install a few base packages
+apt-get update
+apt-get install vim curl zip unzip git python-pip -y
+
+# install java
+apt-get install openjdk-7-jre --no-install-recommends -y
+
+echo Provisioning is complete
+SCRIPT
+ 
+ 
+# Configure VM server
+VAGRANTFILE_API_VERSION = "2"
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.berkshelf.enabled    = true
   config.omnibus.chef_version = :latest
-  
-  if Vagrant.has_plugin?("vagrant-cachier")
-      # Configure cached packages to be shared between instances of the same base box.
-      # More info on http://fgrehm.viewdocs.io/vagrant-cachier/usage
-      config.cache.scope = :box
 
-      # OPTIONAL: If you are using VirtualBox, you might want to use that to enable
-      # NFS for shared folders. This is also very useful for vagrant-libvirt if you
-      # want bi-directional sync
-      config.cache.synced_folder_opts = {
-        type: :nfs,
-        # The nolock option can be useful for an NFSv3 client that wants to avoid the
-        # NLM sideband protocol. Without this option, apt-get might hang if it tries
-        # to lock files needed for /var/cache/* operations. All of this can be avoided
-        # by using NFSv4 everywhere. Please note that the tcp option is not the default.
-        mount_options: ['rw', 'vers=3', 'tcp', 'nolock']
-      }
-      # For more information please check http://docs.vagrantup.com/v2/synced-folders/basic_usage.html
-  end
-  
-  config.vm.define 'linux', primary: true do |linux|
-    linux.vm.box               = linux_box_name
-    linux.vm.box_url           = linux_box_url
-
-    linux.vm.provider :virtualbox do |v|
-      v.customize ['modifyvm', :id, '--memory', '1024']
+  config.vm.define :delta do |x|
+    x.vm.box = "hashicorp/precise64"
+    x.vm.hostname = "microrrelatosGo"
+ #  x.vm.provision :shell, :inline => node_script
+ 
+    x.vm.provider :virtualbox do |v|
+      v.name = "delta"
     end
+ 
+    x.vm.provider :aws do |aws, override|
+      aws.access_key_id = "XXXX"
+      aws.secret_access_key = "XXXX"
+     # aws.keypair_name = "microrrelatosContinuosIntegration.pem"
+      aws.ami = "ami-a1b15cca"
+      aws.region = "us-east-1"
+      aws.instance_type = "t2.small"
+      aws.security_groups = "microrrelatos-continuos-integration"
+ 
+      override.vm.box = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = "/Users/pablojosegonzalezgranados/Documents/UTAD/proyectoFinMaster/microrrelatosContinuosIntegration.pem"
 
-    linux.vm.network "forwarded_port", guest:8153, host: 8153
 
-    linux.vm.provision :chef_solo do |chef|
+    x.vm.provision :chef_solo do |chef|
       chef.log_level = 'info'
       chef.json = {
           'go' => {
@@ -55,38 +68,7 @@ Vagrant::configure(api_version) do |config|
           'recipe[go]'
       ]
     end
+    end
   end
 
-  # Berkshelf doesn't support multi-VM Vagrantfiles.  Will need to sort this out later.
-  #
-  # config.vm.define 'windows', autostart: false do |windows|
-  #   windows.vm.box               = windows_box_name
-  #   windows.vm.box_url           = windows_box_url
-  #
-  #   windows.vm.provider :virtualbox do |v|
-  #     v.gui = true
-  #   end
-  #
-  #   windows.vm.guest = :windows
-  #
-  #   windows.vm.network :forwarded_port, guest: 5985, host: 5985, auto_correct: true
-  #
-  #   windows.vm.network :private_network, ip: '192.168.192.3'
-  #
-  #   windows.vm.provision :chef_solo do |chef|
-  #     chef.log_level = 'info'
-  #     chef.json = {
-  #         'go' => {
-  #             'version' => '14.1.0-18882'
-  #         }
-  #     }
-  #
-  #     chef.run_list = [
-  #         'recipe[go]'
-  #     ]
-  #   end
-  # end
-
 end
-
-  
