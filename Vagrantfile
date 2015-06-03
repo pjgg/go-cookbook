@@ -3,7 +3,8 @@
  
 # Adjustable settings
 CFG_TZ = "UTC"     # timezone, like US/Pacific, US/Eastern, UTC, Europe/Warsaw, etc.
- 
+
+
 # Provisioning script
 node_script = <<SCRIPT
 #!/bin/bash
@@ -14,10 +15,6 @@ dpkg-reconfigure -f noninteractive tzdata
 
 # install a few base packages
 apt-get update
-apt-get install vim curl zip unzip git python-pip -y
-
-# install java
-apt-get install openjdk-7-jre --no-install-recommends -y
 
 echo Provisioning is complete
 SCRIPT
@@ -28,21 +25,17 @@ VAGRANTFILE_API_VERSION = "2"
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.berkshelf.enabled    = true
   config.omnibus.chef_version = :latest
-
+  config.vm.synced_folder "./share", "/vagrant/share"
+  
   config.vm.define :delta do |x|
     x.vm.box = "hashicorp/precise64"
     x.vm.hostname = "microrrelatosGo"
- #  x.vm.provision :shell, :inline => node_script
- 
-    x.vm.provider :virtualbox do |v|
-      v.name = "delta"
-    end
  
     x.vm.provider :aws do |aws, override|
-      aws.access_key_id = "XXXX"
-      aws.secret_access_key = "XXXX"
-     # aws.keypair_name = "microrrelatosContinuosIntegration.pem"
-      aws.ami = "ami-a1b15cca"
+      aws.access_key_id = "XXX"
+      aws.secret_access_key = "XXX"
+      aws.keypair_name = "microrrelatosContinuosIntegration"
+      aws.ami = "ami-5756bb3c"
       aws.region = "us-east-1"
       aws.instance_type = "t2.small"
       aws.security_groups = "microrrelatos-continuos-integration"
@@ -53,22 +46,35 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
 
     x.vm.provision :chef_solo do |chef|
+      chef.cookbooks_path = ["cookbooks"]
       chef.log_level = 'info'
+      chef.add_recipe :apt
+      chef.add_recipe 'git'
+      chef.add_recipe 'go'
+      chef.add_recipe 'nginx'
+      
       chef.json = {
           'go' => {
               'server' => '127.0.0.1',
               'agent' => {
                   'auto_register' => true,
-                  'instance_count' => 3
+                  'instance_count' => 1
               }
-          }
+          },
+         :git    => {
+             :prefix => "/usr/local"
+         }
       }
 
-      chef.run_list = [
-          'recipe[go]'
-      ]
     end
     end
+
   end
 
 end
+
+
+
+
+
+
